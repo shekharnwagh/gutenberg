@@ -39,13 +39,32 @@ export function CollaboratorsPresence( {
 		postType
 	) as PostEditorAwarenessState[];
 
-	const otherActiveCollaborators = activeCollaborators.filter(
-		( c ) => ! c.isMe
-	);
-
-	// Always include self in the list sorted first.
 	const collaboratorsForList = useMemo( () => {
-		return [ ...activeCollaborators ].sort( ( a, b ) => {
+		const collaboratorsByUserId = new Map<
+			string,
+			PostEditorAwarenessState
+		>();
+
+		for ( const collaborator of activeCollaborators ) {
+			const userId = String( collaborator.collaboratorInfo.id );
+			const current = collaboratorsByUserId.get( userId );
+
+			if (
+				! current ||
+				( collaborator.isMe && ! current.isMe ) ||
+				( collaborator.isMe === current.isMe &&
+					collaborator.isConnected !== current.isConnected &&
+					collaborator.isConnected ) ||
+				( collaborator.isMe === current.isMe &&
+					collaborator.isConnected === current.isConnected &&
+					collaborator.collaboratorInfo.enteredAt >
+						current.collaboratorInfo.enteredAt )
+			) {
+				collaboratorsByUserId.set( userId, collaborator );
+			}
+		}
+
+		return [ ...collaboratorsByUserId.values() ].sort( ( a, b ) => {
 			if ( a.isMe && ! b.isMe ) {
 				return -1;
 			}
@@ -55,6 +74,10 @@ export function CollaboratorsPresence( {
 			return 0;
 		} );
 	}, [ activeCollaborators ] );
+
+	const otherCollaboratorsForList = collaboratorsForList.filter(
+		( c ) => ! c.isMe
+	);
 
 	const [ cursorRegistry ] = useState( createCursorRegistry );
 
@@ -66,11 +89,11 @@ export function CollaboratorsPresence( {
 	// When there are no other collaborators, this component should not render
 	// at all. This will always be the case when collaboration is not enabled, but
 	// also when the current user is the only editor with the post open.
-	if ( otherActiveCollaborators.length === 0 ) {
+	if ( otherCollaboratorsForList.length === 0 ) {
 		return null;
 	}
 
-	const me = activeCollaborators.find( ( c ) => c.isMe );
+	const me = collaboratorsForList.find( ( c ) => c.isMe );
 
 	return (
 		<>
@@ -99,7 +122,7 @@ export function CollaboratorsPresence( {
 								size="small"
 							/>
 						) }
-						{ otherActiveCollaborators.map(
+						{ otherCollaboratorsForList.map(
 							( collaboratorState ) => (
 								<Avatar
 									key={ collaboratorState.clientId }
